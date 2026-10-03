@@ -1,0 +1,412 @@
+{
+  "started_at": "20260927T100621Z",
+  "scope": "edge tier only (simulator -> MQTT -> Node-RED)",
+  "environment": {
+    "platform": "Linux-6.18.44-fc-v42-x86_64-with-glibc2.39",
+    "python": "3.11.15",
+    "cpu_count": 2,
+    "memory_gb": 7.8
+  },
+  "args": {
+    "stages": "10,100,1000,5000,7500,10000",
+    "duration": 60.0,
+    "warmup": 15.0,
+    "drain": 90.0,
+    "interval": 1.0,
+    "emergency_rate": 0.0001,
+    "sim_procs": 0,
+    "vehicles_per_proc": 5000,
+    "mqtt_host": "localhost",
+    "mqtt_port": 1883,
+    "mqtt_user": "simulator",
+    "mqtt_password": "sim-dev-password",
+    "nodered": "http://localhost:1880",
+    "telemetry": "http://localhost:8001",
+    "alerts": "http://localhost:8002",
+    "kafka": "localhost:29092",
+    "mongo": "mongodb://root:root-dev-password@localhost:27017/admin",
+    "edge_only": true,
+    "docker_stats": false,
+    "tag": "sandbox-edge"
+  },
+  "stages": [
+    {
+      "vehicles": 10,
+      "simulator_processes": 1,
+      "telemetry_interval_s": 1.0,
+      "measurement_window_s": 60.0,
+      "target_msgs_per_s": 10.0,
+      "messages": {
+        "generated_telemetry": 600,
+        "generated_events": 0,
+        "nodered_received": 600,
+        "nodered_forwarded": 600,
+        "kafka_acked": null,
+        "telemetry_consumed": null,
+        "mongodb_inserted": null
+      },
+      "throughput_msgs_per_s": {
+        "simulator": 10.0,
+        "nodered": 10.0
+      },
+      "latency": {
+        "edge_vehicle_to_nodered_ms": {
+          "samples": 600,
+          "p50": 3,
+          "p95": 5,
+          "p99": 6
+        }
+      },
+      "errors": {
+        "sim_publish_errors": 0,
+        "sim_offline_buffer_dropped": 0,
+        "nodered_rejected": 0,
+        "nodered_duplicates": 0,
+        "kafka_send_errors": null,
+        "mongo_retries": null,
+        "redis_errors": null
+      },
+      "simulator_schedule_lag_s_end": 0.0,
+      "resources": {
+        "mosquitto": {
+          "cpu_pct_avg": 0.1,
+          "cpu_pct_max": 1.0,
+          "mem_mb_avg": 8.3,
+          "mem_mb_max": 8.3
+        },
+        "node-red": {
+          "cpu_pct_avg": 0.8,
+          "cpu_pct_max": 1.5,
+          "mem_mb_avg": 196.6,
+          "mem_mb_max": 197.8
+        },
+        "simulator": {
+          "cpu_pct_avg": 0.2,
+          "cpu_pct_max": 0.5,
+          "mem_mb_avg": 30.1,
+          "mem_mb_max": 30.1
+        }
+      },
+      "delivery": {
+        "generated_total_incl_warmup": 750,
+        "nodered_received_total_after_drain": 750,
+        "not_received": 0
+      }
+    },
+    {
+      "vehicles": 100,
+      "simulator_processes": 1,
+      "telemetry_interval_s": 1.0,
+      "measurement_window_s": 60.0,
+      "target_msgs_per_s": 100.0,
+      "messages": {
+        "generated_telemetry": 6000,
+        "generated_events": 12,
+        "nodered_received": 6000,
+        "nodered_forwarded": 6000,
+        "kafka_acked": null,
+        "telemetry_consumed": null,
+        "mongodb_inserted": null
+      },
+      "throughput_msgs_per_s": {
+        "simulator": 100.0,
+        "nodered": 100.0
+      },
+      "latency": {
+        "edge_vehicle_to_nodered_ms": {
+          "samples": 6000,
+          "p50": 4,
+          "p95": 6,
+          "p99": 8
+        }
+      },
+      "errors": {
+        "sim_publish_errors": 0,
+        "sim_offline_buffer_dropped": 0,
+        "nodered_rejected": 0,
+        "nodered_duplicates": 0,
+        "kafka_send_errors": null,
+        "mongo_retries": null,
+        "redis_errors": null
+      },
+      "simulator_schedule_lag_s_end": 0.0,
+      "resources": {
+        "mosquitto": {
+          "cpu_pct_avg": 0.1,
+          "cpu_pct_max": 1.0,
+          "mem_mb_avg": 8.3,
+          "mem_mb_max": 8.3
+        },
+        "node-red": {
+          "cpu_pct_avg": 2.1,
+          "cpu_pct_max": 6.5,
+          "mem_mb_avg": 209.5,
+          "mem_mb_max": 212.7
+        },
+        "simulator": {
+          "cpu_pct_avg": 1.4,
+          "cpu_pct_max": 2.0,
+          "mem_mb_avg": 30.8,
+          "mem_mb_max": 30.9
+        }
+      },
+      "delivery": {
+        "generated_total_incl_warmup": 7500,
+        "nodered_received_total_after_drain": 7500,
+        "not_received": 0
+      }
+    },
+    {
+      "vehicles": 1000,
+      "simulator_processes": 1,
+      "telemetry_interval_s": 1.0,
+      "measurement_window_s": 60.0,
+      "target_msgs_per_s": 1000.0,
+      "messages": {
+        "generated_telemetry": 60000,
+        "generated_events": 105,
+        "nodered_received": 60000,
+        "nodered_forwarded": 60000,
+        "kafka_acked": null,
+        "telemetry_consumed": null,
+        "mongodb_inserted": null
+      },
+      "throughput_msgs_per_s": {
+        "simulator": 999.9,
+        "nodered": 999.9
+      },
+      "latency": {
+        "edge_vehicle_to_nodered_ms": {
+          "samples": 20000,
+          "p50": 3,
+          "p95": 6,
+          "p99": 7
+        }
+      },
+      "errors": {
+        "sim_publish_errors": 0,
+        "sim_offline_buffer_dropped": 0,
+        "nodered_rejected": 0,
+        "nodered_duplicates": 0,
+        "kafka_send_errors": null,
+        "mongo_retries": null,
+        "redis_errors": null
+      },
+      "simulator_schedule_lag_s_end": 0.0,
+      "resources": {
+        "mosquitto": {
+          "cpu_pct_avg": 1.5,
+          "cpu_pct_max": 2.0,
+          "mem_mb_avg": 8.3,
+          "mem_mb_max": 8.3
+        },
+        "node-red": {
+          "cpu_pct_avg": 16.0,
+          "cpu_pct_max": 18.9,
+          "mem_mb_avg": 232.0,
+          "mem_mb_max": 234.8
+        },
+        "simulator": {
+          "cpu_pct_avg": 14.1,
+          "cpu_pct_max": 16.5,
+          "mem_mb_avg": 36.8,
+          "mem_mb_max": 36.9
+        }
+      },
+      "delivery": {
+        "generated_total_incl_warmup": 75000,
+        "nodered_received_total_after_drain": 75000,
+        "not_received": 0
+      }
+    },
+    {
+      "vehicles": 5000,
+      "simulator_processes": 1,
+      "telemetry_interval_s": 1.0,
+      "measurement_window_s": 60.0,
+      "target_msgs_per_s": 5000.0,
+      "messages": {
+        "generated_telemetry": 300120,
+        "generated_events": 540,
+        "nodered_received": 300066,
+        "nodered_forwarded": 300100,
+        "kafka_acked": null,
+        "telemetry_consumed": null,
+        "mongodb_inserted": null
+      },
+      "throughput_msgs_per_s": {
+        "simulator": 5000.0,
+        "nodered": 4999.1
+      },
+      "latency": {
+        "edge_vehicle_to_nodered_ms": {
+          "samples": 20000,
+          "p50": 10,
+          "p95": 18,
+          "p99": 43
+        }
+      },
+      "errors": {
+        "sim_publish_errors": 0,
+        "sim_offline_buffer_dropped": 0,
+        "nodered_rejected": 0,
+        "nodered_duplicates": 0,
+        "kafka_send_errors": null,
+        "mongo_retries": null,
+        "redis_errors": null
+      },
+      "simulator_schedule_lag_s_end": 0.0,
+      "resources": {
+        "mosquitto": {
+          "cpu_pct_avg": 7.0,
+          "cpu_pct_max": 8.0,
+          "mem_mb_avg": 8.4,
+          "mem_mb_max": 8.4
+        },
+        "node-red": {
+          "cpu_pct_avg": 63.7,
+          "cpu_pct_max": 70.8,
+          "mem_mb_avg": 285.7,
+          "mem_mb_max": 301.9
+        },
+        "simulator": {
+          "cpu_pct_avg": 51.8,
+          "cpu_pct_max": 57.7,
+          "mem_mb_avg": 63.6,
+          "mem_mb_max": 64.2
+        }
+      },
+      "delivery": {
+        "generated_total_incl_warmup": 375000,
+        "nodered_received_total_after_drain": 375000,
+        "not_received": 0
+      }
+    },
+    {
+      "vehicles": 7500,
+      "simulator_processes": 2,
+      "telemetry_interval_s": 1.0,
+      "measurement_window_s": 60.0,
+      "target_msgs_per_s": 7500.0,
+      "messages": {
+        "generated_telemetry": 450159,
+        "generated_events": 705,
+        "nodered_received": 451456,
+        "nodered_forwarded": 451456,
+        "kafka_acked": null,
+        "telemetry_consumed": null,
+        "mongodb_inserted": null
+      },
+      "throughput_msgs_per_s": {
+        "simulator": 7499.2,
+        "nodered": 7520.8
+      },
+      "latency": {
+        "edge_vehicle_to_nodered_ms": {
+          "samples": 20000,
+          "p50": 855,
+          "p95": 975,
+          "p99": 1020
+        }
+      },
+      "errors": {
+        "sim_publish_errors": 0,
+        "sim_offline_buffer_dropped": 0,
+        "nodered_rejected": 0,
+        "nodered_duplicates": 0,
+        "kafka_send_errors": null,
+        "mongo_retries": null,
+        "redis_errors": null
+      },
+      "simulator_schedule_lag_s_end": 0.0,
+      "resources": {
+        "mosquitto": {
+          "cpu_pct_avg": 8.2,
+          "cpu_pct_max": 10.0,
+          "mem_mb_avg": 9.0,
+          "mem_mb_max": 9.9
+        },
+        "node-red": {
+          "cpu_pct_avg": 89.3,
+          "cpu_pct_max": 98.8,
+          "mem_mb_avg": 1169.0,
+          "mem_mb_max": 1909.5
+        },
+        "simulator": {
+          "cpu_pct_avg": 74.9,
+          "cpu_pct_max": 82.6,
+          "mem_mb_avg": 110.9,
+          "mem_mb_max": 111.7
+        }
+      },
+      "delivery": {
+        "generated_total_incl_warmup": 562500,
+        "nodered_received_total_after_drain": 562500,
+        "not_received": 0
+      }
+    },
+    {
+      "vehicles": 10000,
+      "simulator_processes": 2,
+      "telemetry_interval_s": 1.0,
+      "measurement_window_s": 61.4,
+      "target_msgs_per_s": 10000.0,
+      "messages": {
+        "generated_telemetry": null,
+        "generated_events": -169,
+        "nodered_received": 403204,
+        "nodered_forwarded": 403219,
+        "kafka_acked": null,
+        "telemetry_consumed": null,
+        "mongodb_inserted": null
+      },
+      "throughput_msgs_per_s": {
+        "simulator": null,
+        "nodered": 6565.2
+      },
+      "latency": {
+        "edge_vehicle_to_nodered_ms": {
+          "samples": 20000,
+          "p50": 19254,
+          "p95": 19393,
+          "p99": 19459
+        }
+      },
+      "errors": {
+        "sim_publish_errors": 0,
+        "sim_offline_buffer_dropped": 0,
+        "nodered_rejected": 0,
+        "nodered_duplicates": 0,
+        "kafka_send_errors": null,
+        "mongo_retries": null,
+        "redis_errors": null
+      },
+      "simulator_schedule_lag_s_end": 0.0,
+      "resources": {
+        "mosquitto": {
+          "cpu_pct_avg": 8.7,
+          "cpu_pct_max": 11.4,
+          "mem_mb_avg": 112.4,
+          "mem_mb_max": 117.1
+        },
+        "node-red": {
+          "cpu_pct_avg": 86.3,
+          "cpu_pct_max": 132.2,
+          "mem_mb_avg": 2995.2,
+          "mem_mb_max": 3973.1
+        },
+        "simulator": {
+          "cpu_pct_avg": 93.8,
+          "cpu_pct_max": 111.6,
+          "mem_mb_avg": 125.5,
+          "mem_mb_max": 130.6
+        }
+      },
+      "delivery": {
+        "generated_total_incl_warmup": 750000,
+        "nodered_received_total_after_drain": 586071,
+        "not_received": 163929
+      }
+    }
+  ]
+}

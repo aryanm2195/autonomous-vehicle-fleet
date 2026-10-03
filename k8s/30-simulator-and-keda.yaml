@@ -1,0 +1,51 @@
+# Virtual fleet as a horizontally sharded workload: each pod simulates
+# VEHICLE_COUNT vehicles starting at VEHICLE_ID_OFFSET = ordinal * VEHICLE_COUNT.
+# 20 pods x 5,000 = 100,000 VIRTUAL vehicles (software-generated load, not physical vehicles).
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: simulator
+  namespace: av-fleet
+spec:
+  serviceName: simulator
+  replicas: 2            # raise gradually: 2 -> 4 -> 10 -> 20 while watching lag/latency
+  selector: {matchLabels: {app: simulator}}
+  template:
+    metadata:
+      labels: {app: simulator}
+    spec:
+      containers:
+        - name: simulator
+          image: ghcr.io/your-org/av-fleet-simulator:1.0.0
+          command: ["/bin/sh", "-c"]
+          args: ["export VEHICLE_ID_OFFSET=$(( ${HOSTNAME##*-} * VEHICLE_COUNT )); exec python -m fleetsim.main"]
+          env:
+            - {name: MODE, value: load_test}
+            - {name: VEHICLE_COUNT, value: "5000"}
+            - {name: TELEMETRY_INTERVAL, value: "1"}
+            - {name: MQTT_USERNAME, value: simulator}
+            - name: MQTT_PASSWORD
+              valueFrom: {secretKeyRef: {name: fleet-secrets, key: MQTT_SIM_PASSWORD}}
+          envFrom:
+            - configMapRef: {name: fleet-config}
+          resources:
+            requests: {cpu: "1", memory: 512Mi}
+---
+# Optional (KEDA): scale the telemetry consumers on Kafka lag instead of CPU,
+# which reacts to backlog directly. Requires the KEDA operator.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: telemetry-service-lag
+  namespace: av-fleet
+spec:
+  scaleTargetRef: {name: telemetry-service}
+  minReplicaCount: 3
+  maxReplicaCount: 30
+  triggers:
+    - type: kafka
+      metadata:
+        bootstrapServers: fleet-kafka-bootstrap.kafka:9092
+        consumerGroup: telemetry-service
+        topic: vehicle.telemetry
+        lagThreshold: "1000"      # plan §11: queue depth < 1000 messages per partition

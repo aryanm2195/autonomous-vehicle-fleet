@@ -1,0 +1,29 @@
+# AWS override: use MongoDB Atlas (managed, cloud) instead of the local mongodb container.
+#   docker compose -f docker-compose.yml -f deploy/aws/docker-compose.atlas.yml up -d --build
+# Requires ATLAS_URI in .env, e.g.
+#   ATLAS_URI=mongodb+srv://fleet_app:<password>@<cluster>.mongodb.net/fleet?retryWrites=true&w=majority
+services:
+  mongodb:
+    profiles: ["local-mongo"]          # not started on AWS
+  mongodb-exporter:
+    profiles: ["local-mongo"]
+
+  telemetry-service:
+    environment: { MONGODB_URI: "${ATLAS_URI}" }
+    depends_on: !override
+      kafka-init: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+  alert-service:
+    environment: { MONGODB_URI: "${ATLAS_URI}" }
+    depends_on: !override
+      kafka-init: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+  analytics-service:
+    environment: { MONGODB_URI: "${ATLAS_URI}" }
+    depends_on: !override
+      kafka-init: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+  backend:
+    environment: { MONGODB_URI: "${ATLAS_URI}" }
+    depends_on: !override
+      redis: { condition: service_healthy }

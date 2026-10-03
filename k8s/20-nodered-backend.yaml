@@ -1,0 +1,89 @@
+# Node-RED ingestion tier: stateless replicas share the MQTT load through
+# MQTT v5 shared subscriptions ($share/nodered/fleet/+/telemetry).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nodered
+  namespace: av-fleet
+  labels: {app: nodered}
+spec:
+  replicas: 3
+  selector: {matchLabels: {app: nodered}}
+  template:
+    metadata:
+      labels: {app: nodered}
+    spec:
+      containers:
+        - name: nodered
+          image: ghcr.io/your-org/av-fleet-nodered:1.0.0
+          envFrom:
+            - configMapRef: {name: fleet-config}
+          env:
+            - {name: MQTT_USERNAME, value: nodered}
+            - name: MQTT_PASSWORD
+              valueFrom: {secretKeyRef: {name: fleet-secrets, key: MQTT_NODERED_PASSWORD}}
+          ports: [{containerPort: 1880}]
+          resources:
+            requests: {cpu: "1", memory: 512Mi}
+            limits: {memory: 1Gi}
+          livenessProbe: {httpGet: {path: /stats, port: 1880}, periodSeconds: 15}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: {name: nodered, namespace: av-fleet}
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: nodered}
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 70}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: av-fleet
+  labels: {app: backend}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: backend}}
+  template:
+    metadata:
+      labels: {app: backend}
+    spec:
+      containers:
+        - name: backend
+          image: ghcr.io/your-org/av-fleet-backend:1.0.0
+          envFrom:
+            - configMapRef: {name: fleet-config}
+            - secretRef: {name: fleet-secrets}
+          ports: [{containerPort: 8000}]
+          resources:
+            requests: {cpu: 250m, memory: 256Mi}
+          livenessProbe: {httpGet: {path: /healthz, port: 8000}}
+          readinessProbe: {httpGet: {path: /readyz, port: 8000}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: backend, namespace: av-fleet}
+spec:
+  selector: {app: backend}
+  ports: [{port: 80, targetPort: 8000}]
+---
+# AWS Load Balancer Controller -> ALB with TLS (ACM certificate)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: backend
+  namespace: av-fleet
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:REGION:ACCOUNT:certificate/CHANGE_ME
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - {path: /, pathType: Prefix, backend: {service: {name: backend, port: {number: 80}}}}

@@ -1,0 +1,7 @@
+{
+  "name": "av-fleet-nodered",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Node-RED ingestion tier for the virtual AV fleet",
+  "dependencies": { "kafkajs": "2.2.4" }
+}

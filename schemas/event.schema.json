@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/av-fleet-sim/event.schema.json",
+  "title": "Virtual Vehicle Event",
+  "description": "On-board event published by a software-simulated vehicle on fleet/{vehicle_id}/events (QoS 1).",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "message_id",
+    "event_id",
+    "vehicle_id",
+    "timestamp",
+    "event_type",
+    "severity",
+    "source",
+    "details"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "message_id": {
+      "type": "string"
+    },
+    "event_id": {
+      "type": "string"
+    },
+    "vehicle_id": {
+      "type": "string",
+      "pattern": "^vehicle-\\d{5,6}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "COLLISION_WARNING",
+        "OBSTACLE_DETECTED",
+        "SUDDEN_BRAKING",
+        "LOW_BATTERY",
+        "CRITICAL_BATTERY",
+        "SENSOR_FAILURE",
+        "ABNORMAL_SPEED",
+        "ROUTE_DEVIATION",
+        "EMERGENCY_STOP"
+      ]
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "INFO",
+        "LOW",
+        "MEDIUM",
+        "HIGH",
+        "CRITICAL"
+      ]
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "VEHICLE",
+        "PLATFORM"
+      ]
+    },
+    "location": {
+      "type": "object",
+      "properties": {
+        "latitude": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "longitude": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        }
+      }
+    },
+    "vehicle_status": {
+      "type": "string"
+    },
+    "details": {
+      "type": "object"
+    },
+    "simulation": {
+      "type": "object"
+    }
+  }
+}

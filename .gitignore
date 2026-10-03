@@ -1,0 +1,8 @@
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+mosquitto/certs/
+results/.sim-stats-*.json
+node_modules/
+results/.sim-*.log

@@ -1,0 +1,29 @@
+{
+  "started_at": "2026-09-27T10:25:17.411388+00:00",
+  "results": {
+    "malformed": {
+      "sent": 20,
+      "rejected_by_nodered": 20,
+      "reasons_after": {
+        "bad_battery": 6,
+        "bad_coordinates": 1,
+        "invalid_json": 11,
+        "bad_speed": 8,
+        "bad_vehicle_id": 2,
+        "missing_location": 2
+      }
+    },
+    "duplicate": {
+      "duplicates_sent": 20,
+      "dropped_by_nodered": 20
+    },
+    "mqtt_disconnect": {
+      "disconnect_s": 15,
+      "buffered_while_offline": 740.0,
+      "flushed_after_reconnect": 1520.0,
+      "dropped_buffer_full": 0.0,
+      "nodered_received_during_outage_first_half": 0,
+      "nodered_received_total_delta": 2300
+    }
+  }
+}

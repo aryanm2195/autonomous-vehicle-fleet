@@ -1,0 +1,98 @@
+{
+  "started_at": "20260927T101832Z",
+  "scope": "edge tier only (simulator -> MQTT -> Node-RED)",
+  "environment": {
+    "platform": "Linux-6.18.44-fc-v42-x86_64-with-glibc2.39",
+    "python": "3.11.15",
+    "cpu_count": 2,
+    "memory_gb": 7.8
+  },
+  "args": {
+    "stages": "10000",
+    "duration": 45.0,
+    "warmup": 10.0,
+    "drain": 60.0,
+    "interval": 1.0,
+    "emergency_rate": 0.0001,
+    "sim_procs": 0,
+    "vehicles_per_proc": 5000,
+    "mqtt_host": "localhost",
+    "mqtt_port": 1883,
+    "mqtt_user": "simulator",
+    "mqtt_password": "sim-dev-password",
+    "nodered": "http://localhost:1880",
+    "telemetry": "http://localhost:8001",
+    "alerts": "http://localhost:8002",
+    "kafka": "localhost:29092",
+    "mongo": "mongodb://root:root-dev-password@localhost:27017/admin",
+    "edge_only": true,
+    "docker_stats": false,
+    "tag": "overload-diagnosis"
+  },
+  "stages": [
+    {
+      "vehicles": 10000,
+      "simulator_processes": 2,
+      "telemetry_interval_s": 1.0,
+      "measurement_window_s": 47.3,
+      "target_msgs_per_s": 10000.0,
+      "messages": {
+        "generated_telemetry": null,
+        "generated_events": -117,
+        "nodered_received": 229225,
+        "nodered_forwarded": 229238,
+        "kafka_acked": null,
+        "telemetry_consumed": null,
+        "mongodb_inserted": null
+      },
+      "throughput_msgs_per_s": {
+        "simulator": null,
+        "nodered": 4848.7
+      },
+      "latency": {
+        "edge_vehicle_to_nodered_ms": {
+          "samples": 20000,
+          "p50": 8606,
+          "p95": 8678,
+          "p99": 8697
+        }
+      },
+      "errors": {
+        "sim_publish_errors": 0,
+        "sim_offline_buffer_dropped": 0,
+        "nodered_rejected": 0,
+        "nodered_duplicates": 0,
+        "kafka_send_errors": null,
+        "mongo_retries": null,
+        "redis_errors": null
+      },
+      "simulator_schedule_lag_s_end": null,
+      "simulator_metrics_unreadable": true,
+      "resources": {
+        "mosquitto": {
+          "cpu_pct_avg": 9.1,
+          "cpu_pct_max": 13.4,
+          "mem_mb_avg": 112.7,
+          "mem_mb_max": 116.3
+        },
+        "node-red": {
+          "cpu_pct_avg": 69.0,
+          "cpu_pct_max": 106.1,
+          "mem_mb_avg": 875.0,
+          "mem_mb_max": 1249.3
+        },
+        "simulator": {
+          "cpu_pct_avg": 109.1,
+          "cpu_pct_max": 125.9,
+          "mem_mb_avg": 116.5,
+          "mem_mb_max": 129.2
+        }
+      },
+      "delivery": {
+        "generated_total_incl_warmup": 550000,
+        "nodered_received_total_after_drain": 332840,
+        "not_received": 217160
+      }
+    }
+  ]
+}

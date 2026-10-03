@@ -1,0 +1,28 @@
+{
+  "started_at": "2026-09-27T10:24:17.272203+00:00",
+  "results": {
+    "malformed": {
+      "sent": 20,
+      "rejected_by_nodered": 10,
+      "reasons_after": {
+        "bad_battery": 4,
+        "bad_coordinates": 1,
+        "invalid_json": 2,
+        "bad_speed": 3
+      }
+    },
+    "duplicate": {
+      "duplicates_sent": 20,
+      "dropped_by_nodered": 1
+    },
+    "mqtt_disconnect": {
+      "disconnect_s": 15,
+      "buffered_while_offline": 141.0,
+      "flushed_after_reconnect": 322.0,
+      "dropped_buffer_full": 0.0,
+      "nodered_received_during_outage_first_half": 0,
+      "nodered_received_total_delta": 230
+    }
+  },
+  "setup_note": "Recorded while TWO Node-RED replicas shared the MQTT subscription ($share/nodered/...) and the simulator ran in demo mode (20 vehicles, per-vehicle sessions). Counts shown are from replica #1 (port 1880) only: about half the malformed frames went to replica #2, and duplicate copies usually landed on different replicas, so edge de-duplication caught only 1 of 20. See results/shared-subscription-sandbox.md."
+}

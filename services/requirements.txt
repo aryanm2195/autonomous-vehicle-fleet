@@ -1,0 +1,5 @@
+aiokafka>=0.11,<0.15
+motor==3.7.1
+pymongo>=4.9,<4.14
+redis>=5.0
+prometheus-client>=0.20

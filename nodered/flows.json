@@ -1,0 +1,310 @@
+[
+  {
+    "id": "tab_fleet",
+    "type": "tab",
+    "label": "Fleet ingestion pipeline",
+    "disabled": false,
+    "info": "Virtual vehicles (software simulator) -> MQTT -> **validate -> de-duplicate -> filter/enrich** -> Kafka.\nRejected messages go to the dead-letter topic. Horizontal scaling: run more Node-RED replicas; MQTT shared subscriptions ($share/nodered/...) load-balance vehicles across them."
+  },
+  {
+    "id": "mqtt_broker",
+    "type": "mqtt-broker",
+    "name": "Mosquitto",
+    "broker": "${MQTT_BROKER}",
+    "port": "${MQTT_PORT}",
+    "clientid": "",
+    "autoConnect": true,
+    "usetls": false,
+    "protocolVersion": "5",
+    "keepalive": "30",
+    "cleansession": true,
+    "autoUnsubscribe": true,
+    "birthTopic": "",
+    "closeTopic": "",
+    "willTopic": "",
+    "credentials": {
+      "user": "${MQTT_USERNAME}",
+      "password": "${MQTT_PASSWORD}"
+    }
+  },
+  {
+    "id": "mqtt_telemetry",
+    "type": "mqtt in",
+    "z": "tab_fleet",
+    "name": "Vehicle telemetry (shared sub)",
+    "topic": "$share/nodered/fleet/+/telemetry",
+    "qos": "0",
+    "datatype": "utf8",
+    "broker": "mqtt_broker",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 170,
+    "y": 120,
+    "wires": [
+      [
+        "fn_validate"
+      ]
+    ]
+  },
+  {
+    "id": "mqtt_events",
+    "type": "mqtt in",
+    "z": "tab_fleet",
+    "name": "Vehicle events QoS1 (shared sub)",
+    "topic": "$share/nodered/fleet/+/events",
+    "qos": "1",
+    "datatype": "utf8",
+    "broker": "mqtt_broker",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 180,
+    "y": 200,
+    "wires": [
+      [
+        "fn_validate"
+      ]
+    ]
+  },
+  {
+    "id": "fn_validate",
+    "type": "function",
+    "z": "tab_fleet",
+    "name": "Parse + validate schema",
+    "func": "// ---------------------------------------------------------------------------\n// Parse + schema validation (edge filtering)\n// Output 1: valid message   Output 2: rejected -> dead-letter topic\n// Mirrors schemas/telemetry.schema.json & event.schema.json with cheap\n// hand-written checks (full JSON-Schema validation per message is too slow\n// for thousands of messages per second in a single Node-RED instance).\n// ---------------------------------------------------------------------------\nconst stats = global.get('stats');\nconst kind = msg.topic.endsWith('/events') ? 'event' : 'telemetry';\nstats.received[kind]++;\n\nfunction reject(reason) {\n    stats.rejected++;\n    stats.rejectReasons[reason] = (stats.rejectReasons[reason] || 0) + 1;\n    const raw = typeof msg.payload === 'string' ? msg.payload : JSON.stringify(msg.payload);\n    msg.kafkaTopic = env.get('KAFKA_TOPIC_DLQ') || 'vehicle.dlq';\n    msg.kafkaKey = (msg.topic.split('/')[1] || 'unknown');\n    msg.payload = {\n        reason: reason,\n        mqtt_topic: msg.topic,\n        received_at: new Date().toISOString(),\n        raw: raw ? raw.slice(0, 2000) : null\n    };\n    return [null, msg];\n}\n\nlet d = msg.payload;\nif (Buffer.isBuffer(d)) d = d.toString('utf8');\nif (typeof d === 'string') {\n    try { d = JSON.parse(d); } catch (e) { return reject('invalid_json'); }\n}\nif (d === null || typeof d !== 'object' || Array.isArray(d)) return reject('not_an_object');\n\nconst isNum = (v) => typeof v === 'number' && Number.isFinite(v);\nconst inRange = (v, lo, hi) => isNum(v) && v >= lo && v <= hi;\nconst optNum = (v, lo, hi) => v === null || v === undefined || inRange(v, lo, hi);\n\nif (typeof d.vehicle_id !== 'string' || !/^vehicle-\\d{5,6}$/.test(d.vehicle_id)) return reject('bad_vehicle_id');\nif (msg.topic.split('/')[1] !== d.vehicle_id) return reject('topic_vehicle_mismatch');\nif (typeof d.message_id !== 'string' || d.message_id.length < 8) return reject('missing_message_id');\nconst ts = Date.parse(d.timestamp);\nif (!Number.isFinite(ts)) return reject('bad_timestamp');\nconst now = Date.now();\nif (ts > now + 5000) return reject('timestamp_in_future');\nif (now - ts > 24 * 3600 * 1000) return reject('timestamp_too_old');\n\nif (kind === 'event') {\n    const TYPES = ['COLLISION_WARNING', 'OBSTACLE_DETECTED', 'SUDDEN_BRAKING', 'LOW_BATTERY', 'CRITICAL_BATTERY',\n        'SENSOR_FAILURE', 'ABNORMAL_SPEED', 'ROUTE_DEVIATION', 'EMERGENCY_STOP'];\n    const SEV = ['INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];\n    if (!TYPES.includes(d.event_type)) return reject('unknown_event_type');\n    if (!SEV.includes(d.severity)) return reject('bad_severity');\n} else {\n    const L = d.location, B = d.battery, V = d.vehicle;\n    if (!L || typeof L !== 'object') return reject('missing_location');\n    if (!inRange(L.latitude, -90, 90) || !inRange(L.longitude, -180, 180)) return reject('bad_coordinates');\n    if (!inRange(L.speed_kmh, 0, 400)) return reject('bad_speed');\n    if (!inRange(L.heading, 0, 360)) return reject('bad_heading');\n    if (!B || !inRange(B.percentage, 0, 100) || typeof B.charging !== 'boolean') return reject('bad_battery');\n    if (!V || !['AVAILABLE', 'IN_SERVICE', 'IDLE', 'CHARGING', 'MAINTENANCE', 'EMERGENCY'].includes(V.status)) return reject('bad_vehicle_status');\n    if (!Number.isInteger(V.passenger_count) || V.passenger_count < 0 || V.passenger_count > 6) return reject('bad_passenger_count');\n    if (!d.lidar || !optNum(d.lidar.distance_m, 0, 300)) return reject('bad_lidar');\n    if (!d.radar || !optNum(d.radar.distance_m, 0, 300)) return reject('bad_radar');\n    if (!d.camera || !optNum(d.camera.confidence, 0, 1)) return reject('bad_camera');\n    if (!d.traffic || !['LOW', 'MODERATE', 'HIGH', 'CONGESTED'].includes(d.traffic.status)) return reject('bad_traffic');\n}\nmsg.kind = kind;\nmsg.payload = d;\nmsg.generatedAt = ts;\nreturn [msg, null];\n",
+    "outputs": 2,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 440,
+    "y": 160,
+    "wires": [
+      [
+        "fn_dedupe"
+      ],
+      [
+        "fn_kafka"
+      ]
+    ],
+    "outputLabels": [
+      "valid",
+      "rejected -> DLQ"
+    ]
+  },
+  {
+    "id": "fn_dedupe",
+    "type": "function",
+    "z": "tab_fleet",
+    "name": "De-duplicate (message_id)",
+    "func": "// ---------------------------------------------------------------------------\n// De-duplication + sequence tracking\n// A bounded \"seen\" set of message_ids (two rotating generations, so memory is\n// capped) drops duplicates caused by QoS-1 redelivery, store-and-forward\n// replays or faulty senders. Sequence gaps / reordering are counted, not dropped.\n// ---------------------------------------------------------------------------\nconst stats = global.get('stats');\nconst MAX = Number(env.get('DEDUPE_WINDOW') || 200000);\nlet cur = context.get('cur'), old = context.get('old');\nif (!cur) { cur = new Set(); old = new Set(); context.set('cur', cur); context.set('old', old); }\nconst id = msg.payload.message_id;\nif (cur.has(id) || old.has(id)) {\n    stats.duplicates++;\n    return null;\n}\ncur.add(id);\nif (cur.size >= MAX) {                 // rotate generations\n    context.set('old', cur);\n    context.set('cur', new Set());\n}\nif (msg.kind === 'telemetry') {\n    let seqs = context.get('seqs');\n    if (!seqs) { seqs = new Map(); context.set('seqs', seqs); }\n    const last = seqs.get(msg.payload.vehicle_id);\n    const s = msg.payload.sequence;\n    if (last !== undefined && Number.isInteger(s)) {\n        if (s <= last) stats.outOfOrder++;\n        else if (s > last + 1) stats.sequenceGaps += (s - last - 1);\n    }\n    if (Number.isInteger(s) && (last === undefined || s > last)) seqs.set(msg.payload.vehicle_id, s);\n}\nreturn msg;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 680,
+    "y": 140,
+    "wires": [
+      [
+        "fn_enrich"
+      ]
+    ]
+  },
+  {
+    "id": "fn_enrich",
+    "type": "function",
+    "z": "tab_fleet",
+    "name": "Filter + enrich + route",
+    "func": "// ---------------------------------------------------------------------------\n// Filtering + enrichment (\"processing pipeline\" from the project plan \u00a77)\n//  * drops simulator-only debugging fields\n//  * adds ingestion metadata (received time, edge latency, pipeline stage)\n//  * derives a priority flag so critical telemetry can be spotted downstream\n//  * chooses the Kafka topic and partition key (vehicle_id => per-vehicle ordering)\n// ---------------------------------------------------------------------------\nconst stats = global.get('stats');\nconst d = msg.payload;\nconst now = Date.now();\nconst edgeLatency = now - msg.generatedAt;\n\nif (d.simulation) delete d.simulation.malformed_kind;\nd.ingest = {\n    received_at: new Date(now).toISOString(),\n    edge_latency_ms: edgeLatency,\n    gateway: env.get('HOSTNAME') || 'node-red',\n    mqtt_topic: msg.topic\n};\n\n// reservoir of recent edge latencies for /stats percentiles\nconst lat = stats.latency[msg.kind];\nlat.push(edgeLatency);\nif (lat.length > 20000) lat.splice(0, lat.length - 20000);\n\nif (msg.kind === 'event') {\n    d.ingest.priority = (d.severity === 'CRITICAL' || d.severity === 'HIGH') ? 'HIGH' : 'NORMAL';\n    msg.kafkaTopic = env.get('KAFKA_TOPIC_EVENTS') || 'vehicle.events';\n    stats.forwarded.event++;\n} else {\n    const s = d.safety || {};\n    const critical = s.emergency_braking === true ||\n        (typeof s.time_to_collision_s === 'number' && s.time_to_collision_s < 3) ||\n        d.vehicle.status === 'EMERGENCY';\n    d.location.speed_mps = Math.round(d.location.speed_kmh / 3.6 * 100) / 100;   // unit conversion\n    d.ingest.priority = critical ? 'HIGH' : 'NORMAL';\n    msg.kafkaTopic = env.get('KAFKA_TOPIC_TELEMETRY') || 'vehicle.telemetry';\n    stats.forwarded.telemetry++;\n}\nmsg.kafkaKey = d.vehicle_id;\nreturn msg;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 910,
+    "y": 140,
+    "wires": [
+      [
+        "fn_kafka",
+        "sw_events"
+      ]
+    ]
+  },
+  {
+    "id": "fn_kafka",
+    "type": "function",
+    "z": "tab_fleet",
+    "name": "Kafka producer (batched)",
+    "func": "// ---------------------------------------------------------------------------\n// Kafka producer (kafkajs) with micro-batching\n// Messages are buffered and flushed every KAFKA_LINGER_MS or KAFKA_BATCH_SIZE\n// messages, whichever comes first. If Kafka is unavailable the buffer keeps\n// messages (bounded by KAFKA_MAX_BUFFER, oldest dropped and counted) and\n// retries - Node-RED keeps accepting MQTT traffic meanwhile.\n// ---------------------------------------------------------------------------\nconst st = context.get('state');\nif (!st) return null;\nst.buffer.push({ topic: msg.kafkaTopic, key: msg.kafkaKey, value: JSON.stringify(msg.payload) });\nif (st.buffer.length > st.maxBuffer) {\n    const drop = st.buffer.length - st.maxBuffer;\n    st.buffer.splice(0, drop);\n    global.get('stats').kafka.dropped += drop;\n}\nif (st.buffer.length >= st.batchSize && !st.flushing) st.flush();\nreturn null;\n",
+    "outputs": 0,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "// On Start: create the kafkajs producer and the flush loop\nconst stats = global.get('stats');\nconst enabled = String(env.get('KAFKA_ENABLED') || 'true').toLowerCase() !== 'false';\nconst st = {\n    buffer: [], flushing: false, connected: false, producer: null,\n    batchSize: Number(env.get('KAFKA_BATCH_SIZE') || 500),\n    maxBuffer: Number(env.get('KAFKA_MAX_BUFFER') || 200000),\n    linger: Number(env.get('KAFKA_LINGER_MS') || 20)\n};\ncontext.set('state', st);\nstats.kafka.enabled = enabled;\n\nst.flush = async function () {\n    if (st.flushing || st.buffer.length === 0) return;\n    if (!enabled) {                                    // edge-only benchmark mode\n        stats.kafka.discardedDisabled += st.buffer.length;\n        st.buffer.length = 0;\n        return;\n    }\n    if (!st.connected) return;\n    st.flushing = true;\n    const batch = st.buffer.splice(0, Math.max(st.batchSize, 2000));\n    const byTopic = {};\n    for (const m of batch) (byTopic[m.topic] = byTopic[m.topic] || []).push({ key: m.key, value: m.value });\n    const topicMessages = Object.keys(byTopic).map(t => ({ topic: t, messages: byTopic[t] }));\n    const t0 = Date.now();\n    try {\n        await st.producer.sendBatch({ topicMessages, acks: -1, timeout: 10000 });\n        stats.kafka.sent += batch.length;\n        stats.kafka.batches++;\n        stats.kafka.lastBatchMs = Date.now() - t0;\n    } catch (e) {\n        stats.kafka.errors++;\n        stats.kafka.lastError = String(e.message || e);\n        st.buffer.unshift(...batch);                  // keep order, retry later\n        node.status({ fill: 'red', shape: 'ring', text: 'kafka error: ' + stats.kafka.lastError.slice(0, 40) });\n    } finally {\n        st.flushing = false;\n    }\n};\n\nst.timer = setInterval(() => {\n    st.flush();\n    node.status({ fill: st.connected ? 'green' : (enabled ? 'yellow' : 'grey'), shape: 'dot',\n        text: (enabled ? (st.connected ? 'connected' : 'connecting') : 'kafka disabled') +\n            ' | sent ' + stats.kafka.sent + ' | buf ' + st.buffer.length });\n}, st.linger);\n\nif (enabled) {\n    const { Kafka, logLevel } = global.get('kafkajs');\n    const kafka = new Kafka({\n        clientId: 'node-red-' + (env.get('HOSTNAME') || 'edge'),\n        brokers: String(env.get('KAFKA_BROKER') || 'kafka:9092').split(','),\n        logLevel: logLevel.WARN,\n        retry: { initialRetryTime: 300, retries: 1000000 }\n    });\n    st.producer = kafka.producer({ allowAutoTopicCreation: false, idempotent: false, maxInFlightRequests: 5 });\n    const connect = async () => {\n        try {\n            await st.producer.connect();\n            st.connected = true;\n            stats.kafka.connected = true;\n            node.log('Kafka producer connected to ' + env.get('KAFKA_BROKER'));\n        } catch (e) {\n            stats.kafka.lastError = String(e.message || e);\n            node.warn('Kafka connect failed, retrying in 3s: ' + stats.kafka.lastError);\n            setTimeout(connect, 3000);\n        }\n    };\n    st.producer.on(st.producer.events.DISCONNECT, () => { st.connected = false; stats.kafka.connected = false; setTimeout(connect, 3000); });\n    connect();\n}\n",
+    "finalize": "// On Stop: flush what we can and disconnect cleanly\nconst st = context.get('state');\nif (st) {\n    clearInterval(st.timer);\n    if (st.producer && st.connected) {\n        return Promise.resolve(st.flush()).then(() => st.producer.disconnect()).catch(e => node.warn(e));\n    }\n}\n",
+    "libs": [],
+    "x": 1150,
+    "y": 160,
+    "wires": []
+  },
+  {
+    "id": "sw_events",
+    "type": "switch",
+    "z": "tab_fleet",
+    "name": "critical events only",
+    "property": "payload.severity",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "eq",
+        "v": "CRITICAL",
+        "vt": "str"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 1,
+    "x": 1140,
+    "y": 240,
+    "wires": [
+      [
+        "dbg_events"
+      ]
+    ]
+  },
+  {
+    "id": "dbg_events",
+    "type": "debug",
+    "z": "tab_fleet",
+    "name": "CRITICAL events",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "payload.event_type",
+    "statusType": "msg",
+    "x": 1350,
+    "y": 240,
+    "wires": []
+  },
+  {
+    "id": "http_metrics",
+    "type": "http in",
+    "z": "tab_fleet",
+    "name": "",
+    "url": "/metrics",
+    "method": "get",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 160,
+    "y": 340,
+    "wires": [
+      [
+        "fn_metrics"
+      ]
+    ]
+  },
+  {
+    "id": "http_stats",
+    "type": "http in",
+    "z": "tab_fleet",
+    "name": "",
+    "url": "/stats",
+    "method": "get",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 150,
+    "y": 400,
+    "wires": [
+      [
+        "fn_metrics"
+      ]
+    ]
+  },
+  {
+    "id": "fn_metrics",
+    "type": "function",
+    "z": "tab_fleet",
+    "name": "Prometheus / JSON stats",
+    "func": "// GET /metrics  -> Prometheus text format;  GET /stats -> JSON (used by the load-test harness)\nconst s = global.get('stats');\nfunction pct(arr, p) {\n    if (!arr.length) return null;\n    const a = arr.slice().sort((x, y) => x - y);\n    return a[Math.min(a.length - 1, Math.floor(p / 100 * a.length))];\n}\nif (msg.req.path.endsWith('/stats')) {\n    if (msg.req.query.reset === '1') { s.latency.telemetry.length = 0; s.latency.event.length = 0; }\n    msg.payload = {\n        uptime_s: (Date.now() - s.startedAt) / 1000,\n        received: s.received, forwarded: s.forwarded, rejected: s.rejected, reject_reasons: s.rejectReasons,\n        duplicates: s.duplicates, out_of_order: s.outOfOrder, sequence_gaps: s.sequenceGaps, kafka: s.kafka,\n        edge_latency_ms: {\n            telemetry: { samples: s.latency.telemetry.length, p50: pct(s.latency.telemetry, 50), p95: pct(s.latency.telemetry, 95), p99: pct(s.latency.telemetry, 99) },\n            event: { samples: s.latency.event.length, p50: pct(s.latency.event, 50), p95: pct(s.latency.event, 95), p99: pct(s.latency.event, 99) }\n        }\n    };\n    msg.headers = { 'Content-Type': 'application/json' };\n    return msg;\n}\nconst L = [];\nconst c = (name, help, v, labels) => { L.push(`# HELP ${name} ${help}`, `# TYPE ${name} counter`); for (const [lab, val] of (labels || [['', v]])) L.push(`${name}${lab} ${val}`); };\nconst g = (name, help, v) => { L.push(`# HELP ${name} ${help}`, `# TYPE ${name} gauge`, `${name} ${v}`); };\nc('nodered_messages_received_total', 'MQTT messages received', null, [['{kind=\"telemetry\"}', s.received.telemetry], ['{kind=\"event\"}', s.received.event]]);\nc('nodered_messages_forwarded_total', 'Messages forwarded to Kafka', null, [['{kind=\"telemetry\"}', s.forwarded.telemetry], ['{kind=\"event\"}', s.forwarded.event]]);\nc('nodered_messages_rejected_total', 'Messages rejected by validation', null,\n  Object.keys(s.rejectReasons).length ? Object.entries(s.rejectReasons).map(([k, v]) => [`{reason=\"${k}\"}`, v]) : [['{reason=\"none\"}', 0]]);\nc('nodered_duplicates_total', 'Duplicate messages dropped', s.duplicates);\nc('nodered_out_of_order_total', 'Out-of-order telemetry messages', s.outOfOrder);\nc('nodered_kafka_sent_total', 'Messages acknowledged by Kafka', s.kafka.sent);\nc('nodered_kafka_errors_total', 'Kafka send errors', s.kafka.errors);\nc('nodered_kafka_dropped_total', 'Messages dropped because the Kafka buffer overflowed', s.kafka.dropped);\ng('nodered_kafka_connected', 'Kafka producer connected', s.kafka.connected ? 1 : 0);\nconst p = pct(s.latency.telemetry, 95);\ng('nodered_edge_latency_p95_ms', 'p95 vehicle->Node-RED latency (recent window)', p === null ? 'NaN' : p);\nmsg.payload = L.join('\\n') + '\\n';\nmsg.headers = { 'Content-Type': 'text/plain; version=0.0.4' };\nreturn msg;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 400,
+    "y": 370,
+    "wires": [
+      [
+        "http_resp"
+      ]
+    ]
+  },
+  {
+    "id": "http_resp",
+    "type": "http response",
+    "z": "tab_fleet",
+    "name": "",
+    "statusCode": "",
+    "headers": {},
+    "x": 610,
+    "y": 370,
+    "wires": []
+  },
+  {
+    "id": "inj_reset",
+    "type": "inject",
+    "z": "tab_fleet",
+    "name": "Reset counters",
+    "props": [],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 170,
+    "y": 470,
+    "wires": [
+      [
+        "fn_reset"
+      ]
+    ]
+  },
+  {
+    "id": "fn_reset",
+    "type": "function",
+    "z": "tab_fleet",
+    "name": "reset stats",
+    "func": "// Manual \"reset counters\" button (the counters themselves are created in settings.js)\nconst s = global.get('stats');\ns.startedAt = Date.now();\ns.received.telemetry = s.received.event = 0;\ns.forwarded.telemetry = s.forwarded.event = 0;\ns.rejected = 0; s.rejectReasons = {};\ns.duplicates = s.outOfOrder = s.sequenceGaps = 0;\ns.latency.telemetry.length = 0; s.latency.event.length = 0;\nnode.status({ fill: 'blue', shape: 'dot', text: 'reset ' + new Date().toISOString() });\nreturn null;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 370,
+    "y": 470,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "comment1",
+    "type": "comment",
+    "z": "tab_fleet",
+    "name": "SOFTWARE SIMULATION: all telemetry comes from virtual vehicles",
+    "info": "No physical vehicles or sensors. See README.",
+    "x": 290,
+    "y": 60,
+    "wires": []
+  }
+]

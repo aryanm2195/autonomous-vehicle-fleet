@@ -1,0 +1,164 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: telemetry-service
+  namespace: av-fleet
+  labels: {app: telemetry-service}
+spec:
+  replicas: 3
+  selector: {matchLabels: {app: telemetry-service}}
+  template:
+    metadata:
+      labels: {app: telemetry-service}
+      annotations: {prometheus.io/scrape: "true", prometheus.io/port: "8001"}
+    spec:
+      containers:
+        - name: telemetry-service
+          image: ghcr.io/your-org/av-fleet-services:1.0.0
+          command: ["python", "-m", "telemetry_service.main"]
+          envFrom:
+            - configMapRef: {name: fleet-config}
+            - secretRef: {name: fleet-secrets}
+          env:
+            - {name: SERVICE_HTTP_PORT, value: "8001"}
+          ports: [{containerPort: 8001, name: http}]
+          resources:
+            requests: {cpu: 500m, memory: 512Mi}
+            limits: {memory: 512Mi}
+          livenessProbe: {httpGet: {path: /health, port: 8001}, periodSeconds: 10}
+          readinessProbe: {httpGet: {path: /ready, port: 8001}, periodSeconds: 5}
+---
+# Kafka partitions cap useful consumer replicas: vehicle.telemetry needs >= 30 partitions for 30 replicas.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: telemetry-service
+  namespace: av-fleet
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: telemetry-service}
+  minReplicas: 3
+  maxReplicas: 30
+  metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 70}}
+  behavior:
+    scaleDown: {stabilizationWindowSeconds: 300}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: telemetry-service
+  namespace: av-fleet
+spec:
+  minAvailable: 1
+  selector: {matchLabels: {app: telemetry-service}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alert-service
+  namespace: av-fleet
+  labels: {app: alert-service}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: alert-service}}
+  template:
+    metadata:
+      labels: {app: alert-service}
+      annotations: {prometheus.io/scrape: "true", prometheus.io/port: "8002"}
+    spec:
+      containers:
+        - name: alert-service
+          image: ghcr.io/your-org/av-fleet-services:1.0.0
+          command: ["python", "-m", "alert_service.main"]
+          envFrom:
+            - configMapRef: {name: fleet-config}
+            - secretRef: {name: fleet-secrets}
+          env:
+            - {name: SERVICE_HTTP_PORT, value: "8002"}
+          ports: [{containerPort: 8002, name: http}]
+          resources:
+            requests: {cpu: 250m, memory: 256Mi}
+            limits: {memory: 256Mi}
+          livenessProbe: {httpGet: {path: /health, port: 8002}, periodSeconds: 10}
+          readinessProbe: {httpGet: {path: /ready, port: 8002}, periodSeconds: 5}
+---
+# Kafka partitions cap useful consumer replicas: vehicle.telemetry needs >= 12 partitions for 12 replicas.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: alert-service
+  namespace: av-fleet
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: alert-service}
+  minReplicas: 2
+  maxReplicas: 12
+  metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 70}}
+  behavior:
+    scaleDown: {stabilizationWindowSeconds: 300}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: alert-service
+  namespace: av-fleet
+spec:
+  minAvailable: 1
+  selector: {matchLabels: {app: alert-service}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analytics-service
+  namespace: av-fleet
+  labels: {app: analytics-service}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: analytics-service}}
+  template:
+    metadata:
+      labels: {app: analytics-service}
+      annotations: {prometheus.io/scrape: "true", prometheus.io/port: "8003"}
+    spec:
+      containers:
+        - name: analytics-service
+          image: ghcr.io/your-org/av-fleet-services:1.0.0
+          command: ["python", "-m", "analytics_service.main"]
+          envFrom:
+            - configMapRef: {name: fleet-config}
+            - secretRef: {name: fleet-secrets}
+          env:
+            - {name: SERVICE_HTTP_PORT, value: "8003"}
+          ports: [{containerPort: 8003, name: http}]
+          resources:
+            requests: {cpu: 500m, memory: 1Gi}
+            limits: {memory: 1Gi}
+          livenessProbe: {httpGet: {path: /health, port: 8003}, periodSeconds: 10}
+          readinessProbe: {httpGet: {path: /ready, port: 8003}, periodSeconds: 5}
+---
+# Kafka partitions cap useful consumer replicas: vehicle.telemetry needs >= 3 partitions for 3 replicas.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: analytics-service
+  namespace: av-fleet
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: analytics-service}
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 70}}
+  behavior:
+    scaleDown: {stabilizationWindowSeconds: 300}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: analytics-service
+  namespace: av-fleet
+spec:
+  minAvailable: 1
+  selector: {matchLabels: {app: analytics-service}}

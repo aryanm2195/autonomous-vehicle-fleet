@@ -1,0 +1,40 @@
+# Deployment/scaling layer for the software-simulated fleet (target: AWS EKS).
+# NOTE: these manifests have NOT been executed as part of this prototype's measured tests;
+# they describe how the same containers scale out. See docs/DEPLOYMENT.md.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: av-fleet
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fleet-config
+  namespace: av-fleet
+data:
+  KAFKA_BROKER: "fleet-kafka-bootstrap.kafka:9092"      # Strimzi / Amazon MSK bootstrap
+  KAFKA_TOPIC_TELEMETRY: "vehicle.telemetry"
+  KAFKA_TOPIC_EVENTS: "vehicle.events"
+  KAFKA_TOPIC_ALERTS: "vehicle.alerts"
+  KAFKA_TOPIC_DLQ: "vehicle.dlq"
+  MQTT_BROKER: "mosquitto.av-fleet"
+  MQTT_PORT: "1883"
+  MONGODB_DB: "fleet"
+  LOW_BATTERY_THRESHOLD: "20"
+  CRITICAL_BATTERY_THRESHOLD: "10"
+  LOG_LEVEL: "INFO"
+---
+# Populate from AWS Secrets Manager via External Secrets Operator in production.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: fleet-secrets
+  namespace: av-fleet
+type: Opaque
+stringData:
+  MONGODB_URI: "mongodb+srv://fleet_app:CHANGE_ME@cluster.example.mongodb.net/fleet"
+  REDIS_URI: "rediss://:CHANGE_ME@fleet-redis.xxxxxx.cache.amazonaws.com:6379/0"
+  JWT_SECRET: "CHANGE_ME_LONG_RANDOM"
+  API_USERS: "admin:CHANGE_ME:admin"
+  MQTT_NODERED_PASSWORD: "CHANGE_ME"
+  MQTT_SIM_PASSWORD: "CHANGE_ME"

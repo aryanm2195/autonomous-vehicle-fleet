@@ -1,0 +1,26 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: simulator            # virtual fleet (in docker)
+    static_configs: [{ targets: ["simulator:9105"] }]
+  - job_name: simulator-host       # simulator started on the host by scripts/loadtest.py
+    static_configs: [{ targets: ["host.docker.internal:9105", "host.docker.internal:9115", "host.docker.internal:9125", "host.docker.internal:9135"] }]
+  - job_name: nodered
+    metrics_path: /metrics
+    static_configs: [{ targets: ["nodered:1880"] }]
+  - job_name: telemetry-service
+    static_configs: [{ targets: ["telemetry-service:8001"] }]
+  - job_name: alert-service
+    static_configs: [{ targets: ["alert-service:8002"] }]
+  - job_name: analytics-service
+    static_configs: [{ targets: ["analytics-service:8003"] }]
+  - job_name: backend
+    static_configs: [{ targets: ["backend:8000"] }]
+  - job_name: kafka
+    static_configs: [{ targets: ["kafka-exporter:9308"] }]
+  - job_name: redis
+    static_configs: [{ targets: ["redis-exporter:9121"] }]
+  - job_name: mongodb
+    static_configs: [{ targets: ["mongodb-exporter:9216"] }]

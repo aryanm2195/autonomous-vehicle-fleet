@@ -1,0 +1,14 @@
+# Least-privilege topic ACLs
+# Simulator / vehicle gateway: may only PUBLISH vehicle data
+user simulator
+topic write fleet/#
+
+# Node-RED ingestion tier: may only SUBSCRIBE to vehicle data
+user nodered
+topic read fleet/#
+topic read $SYS/#
+
+# Operations / debugging account
+user admin
+topic readwrite #
+topic read $SYS/#

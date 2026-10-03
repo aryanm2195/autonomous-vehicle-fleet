@@ -1,0 +1,6 @@
+apiVersion: 1
+providers:
+  - name: av-fleet
+    folder: AV Fleet
+    type: file
+    options: { path: /var/lib/grafana/dashboards }
